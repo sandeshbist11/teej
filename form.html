@@ -1,0 +1,188 @@
+from pathlib import Path
+import zipfile, textwrap
+
+html = r'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>For My Maya 💖 | Happy Teej</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;
+  background:linear-gradient(135deg,#fff0f6,#ffe4ec,#fff8fb);
+  color:#4a1830;min-height:100vh;overflow-x:hidden
+}
+.page{display:none;min-height:100vh;padding:35px 18px;align-items:center;justify-content:center}
+.page.active{display:flex}
+.card{
+  width:min(720px,94vw);background:rgba(255,255,255,.9);
+  border-radius:28px;padding:34px;box-shadow:0 18px 50px rgba(120,30,70,.18);
+  text-align:center;position:relative
+}
+h1{font-size:clamp(2rem,6vw,4rem);margin:8px 0 15px}
+h2{font-size:clamp(1.6rem,4vw,2.5rem)}
+p{font-size:1.1rem;line-height:1.6}
+.heart{font-size:4rem;animation:pulse 1.3s infinite}
+@keyframes pulse{50%{transform:scale(1.15)}}
+button{
+  border:0;border-radius:999px;padding:14px 25px;font-size:1rem;font-weight:700;
+  cursor:pointer;margin:8px;transition:.2s
+}
+.yes{background:#e91e63;color:white}.no{background:#eee;color:#555}
+button:hover{transform:translateY(-2px) scale(1.03)}
+.choice{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;position:relative;min-height:60px}
+#noBtn{position:relative}
+.question{font-size:1.35rem;font-weight:750;margin:25px 0}
+.options{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.option{background:#fff0f5;border:2px solid #ffd0df;color:#7a2349}
+.option.selected{background:#e91e63;color:white;border-color:#e91e63}
+.next{background:#7b1fa2;color:white;margin-top:22px}
+.progress{height:8px;background:#f4d9e4;border-radius:10px;overflow:hidden;margin-bottom:20px}
+.bar{height:100%;width:20%;background:#e91e63;transition:.3s}
+.teej-img{
+ width:100%;max-height:380px;object-fit:cover;border-radius:22px;margin:12px 0 20px;
+}
+.small{font-size:.9rem;color:#765}
+.confetti{position:fixed;top:-20px;font-size:22px;pointer-events:none;animation:fall 3s linear forwards}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:0}}
+@media(max-width:520px){.options{grid-template-columns:1fr}.card{padding:25px 18px}}
+</style>
+</head>
+<body>
+
+<section id="page1" class="page active">
+  <div class="card">
+    <div class="heart">💖</div>
+    <h1>Hey Maya! 🥰</h1>
+    <p>I have one very important question for you...</p>
+    <h2>Do you love me? 👀</h2>
+    <div class="choice">
+      <button class="yes" onclick="showPage(2)">YES, obviously! 💕</button>
+      <button class="no" id="noBtn" onmouseover="escapeNo()" onclick="escapeNo()">NO 😭</button>
+    </div>
+    <p class="small">Hint: There is definitely a correct answer. 😂</p>
+  </div>
+</section>
+
+<section id="page2" class="page">
+  <div class="card">
+    <h1>YAYYY! 💕</h1>
+    <p>Correct answer detected successfully. 😌❤️</p>
+    <p>Now you have to survive <b>5 extremely serious questions</b>. 😂</p>
+    <button class="yes" onclick="showQuestion(1)">Let's go! 🚀</button>
+  </div>
+</section>
+
+<section id="quiz" class="page">
+  <div class="card">
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <div id="question"></div>
+    <div class="options" id="options"></div>
+    <button class="next" id="nextBtn" onclick="nextQuestion()" disabled>Next 💗</button>
+  </div>
+</section>
+
+<section id="final" class="page">
+  <div class="card">
+    <h1>Happy Teej, Maya! 🌸❤️</h1>
+    <img class="teej-img"
+      src="https://upload.wikimedia.org/wikipedia/commons/4/49/Teej_in_Nepal_2010.jpg"
+      alt="Teej celebration in Nepal">
+    <h2>तिमीलाई Happy Teej! 🌺</h2>
+    <p>
+      May your Teej be full of happiness, laughter, beautiful moments,
+      delicious food and lots of smiles. ❤️
+    </p>
+    <p><b>From someone who is very lucky to have you. 🥹💕</b></p>
+    <p class="small">Teej photo: Wikimedia Commons, CC BY-SA 2.0</p>
+    <button class="yes" onclick="celebrate()">One more surprise 💖</button>
+  </div>
+</section>
+
+<script>
+const questions=[
+ {q:"If I steal one momo from your plate, what will you do? 🥟😂",
+  a:["Give me another one ❤️","Fight for the momo 😤","Pretend not to notice 😌","Order a new plate 😂"]},
+ {q:"Who is more dramatic? 🎭",
+  a:["Me 😎","You 😭","Both of us 😂","Definitely the cat 🐱"]},
+ {q:"If we get lost somewhere, who finds the way? 🗺️",
+  a:["You 🧠","Me 😎","Google Maps 😂","We stay lost together 💕"]},
+ {q:"What should we do on Teej? 🌸",
+  a:["Eat everything 😋","Take cute photos 📸","Dance 💃","All of the above! ❤️"]},
+ {q:"Final question: Am I your favourite person? 👀❤️",
+  a:["YESSS! 💕","Obviously 😭❤️","100% 😌","Why are you even asking? 😂"]}
+];
+let current=0,selected=false;
+
+function showPage(n){
+ document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+ document.getElementById("page"+n)?.classList.add("active");
+ if(n===2) window.scrollTo(0,0);
+}
+function escapeNo(){
+ const b=document.getElementById("noBtn");
+ const x=(Math.random()*180)-90, y=(Math.random()*100)-50;
+ b.style.transform=`translate(${x}px,${y}px)`;
+ b.textContent=["NO 😭","Nice try 😂","Try again 😭","Nope! 😜"][Math.floor(Math.random()*4)];
+}
+function showQuestion(n){
+ current=n-1; selected=false;
+ document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+ document.getElementById("quiz").classList.add("active");
+ renderQuestion();
+}
+function renderQuestion(){
+ const q=questions[current];
+ document.getElementById("question").innerHTML=
+   `<div class="question">Question ${current+1}/5<br>${q.q}</div>`;
+ const box=document.getElementById("options");
+ box.innerHTML="";
+ q.a.forEach((ans,i)=>{
+   const b=document.createElement("button");
+   b.className="option"; b.textContent=ans;
+   b.onclick=()=>{
+     document.querySelectorAll(".option").forEach(x=>x.classList.remove("selected"));
+     b.classList.add("selected"); selected=true;
+     document.getElementById("nextBtn").disabled=false;
+   };
+   box.appendChild(b);
+ });
+ document.getElementById("nextBtn").textContent=current===4?"See the surprise 🎁":"Next 💗";
+ document.getElementById("nextBtn").disabled=true;
+ document.getElementById("bar").style.width=((current+1)/5*100)+"%";
+}
+function nextQuestion(){
+ if(!selected)return;
+ if(current<4){current++;renderQuestion();}
+ else{
+   document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+   document.getElementById("final").classList.add("active");
+   celebrate();
+ }
+}
+function celebrate(){
+ for(let i=0;i<35;i++){
+   const s=document.createElement("span");s.className="confetti";
+   s.textContent=["❤️","🌸","💕","✨","🎀","🌺"][Math.floor(Math.random()*6)];
+   s.style.left=Math.random()*100+"vw";
+   s.style.animationDelay=Math.random()*1.5+"s";
+   document.body.appendChild(s);
+   setTimeout(()=>s.remove(),4500);
+ }
+}
+</script>
+</body>
+</html>
+'''
+
+out = Path("/mnt/data/Happy_Teej_Maya_Website")
+out.mkdir(exist_ok=True)
+(out/"index.html").write_text(html, encoding="utf-8")
+
+zip_path = Path("/mnt/data/Happy_Teej_Maya_Website.zip")
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    z.write(out/"index.html", "index.html")
+
+print(zip_path)
